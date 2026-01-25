@@ -4,18 +4,28 @@ from datetime import datetime
 
 from dotenv import load_dotenv
 from docx import Document
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from groq import Groq
 
+
+# ---------------- INIT ----------------
+
 load_dotenv()
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+TEMPLATE_DIR = os.path.join(BASE_DIR, "templates")
+GENERATED_DIR = os.path.join(BASE_DIR, "generated")
+
+os.makedirs(GENERATED_DIR, exist_ok=True)
 
 groq_client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 app = FastAPI()
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -90,7 +100,7 @@ Document:
         resp = groq_client.chat.completions.create(
             model="llama-3.1-8b-instant",
             messages=[
-                {"role": "system", "content": "You output ONLY JSON. No extra text."},
+                {"role": "system", "content": "You output ONLY JSON."},
                 {"role": "user", "content": prompt},
             ],
             temperature=0.2,
@@ -98,10 +108,7 @@ Document:
 
         output = resp.choices[0].message.content.strip()
 
-        try:
-            return json.loads(output)
-        except:
-            return {"raw_output": output}
+        return json.loads(output)
 
     except Exception as e:
         return {"error": str(e)}
@@ -109,8 +116,12 @@ Document:
 
 def generate_document(data, template, prefix, doc_type):
 
-    path = os.path.join("templates", template)
-    doc = Document(path)
+    template_path = os.path.join(TEMPLATE_DIR, template)
+
+    if not os.path.exists(template_path):
+        raise HTTPException(status_code=500, detail="Template missing")
+
+    doc = Document(template_path)
 
     mapping = {
         "{EMPLOYEE_NAME}": data.employee_name,
@@ -135,14 +146,12 @@ def generate_document(data, template, prefix, doc_type):
 
     replace_placeholders(doc, mapping)
 
-    os.makedirs("generated", exist_ok=True)
-
     filename = (
         f"{prefix}_{data.employee_name.replace(' ', '_')}_"
         f"{datetime.now().strftime('%Y%m%d%H%M%S')}.docx"
     )
 
-    file_path = os.path.join("generated", filename)
+    file_path = os.path.join(GENERATED_DIR, filename)
 
     doc.save(file_path)
 
@@ -210,10 +219,13 @@ def experience_letter(data: EmployeeData):
 @app.get("/download/{filename}")
 def download_file(filename: str):
 
-    path = os.path.join("generated", filename)
+    file_path = os.path.join(GENERATED_DIR, filename)
+
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found")
 
     return FileResponse(
-        path,
+        path=file_path,
         filename=filename,
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     )
