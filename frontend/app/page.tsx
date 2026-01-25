@@ -12,6 +12,9 @@ type FormState = {
   reporting_manager: string;
   offer_date: string;
   joining_date: string;
+  end_date: string;
+  termination_date: string;
+  reason: string;
   ctc: string;
   probation_months: string;
   notice_period: string;
@@ -29,6 +32,9 @@ const defaultForm: FormState = {
   reporting_manager: "",
   offer_date: "",
   joining_date: "",
+  end_date: "",
+  termination_date: "",
+  reason: "",
   ctc: "",
   probation_months: "",
   notice_period: "",
@@ -36,10 +42,12 @@ const defaultForm: FormState = {
   hr_name: "",
 };
 
+const API_URL = "http://127.0.0.1:8000";
+
 export default function Home() {
   const [form, setForm] = useState<FormState>(defaultForm);
+  const [docType, setDocType] = useState("offer");
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{ docx_file?: string; ai_review?: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const update = (key: keyof FormState, value: string) => {
@@ -52,18 +60,38 @@ export default function Home() {
   async function generate() {
     setLoading(true);
     setError(null);
-    setResult(null);
 
     try {
-      const res = await fetch("http://127.0.0.1:8000/generate-offer-letter", {
+      let endpoint = "";
+
+      if (docType === "offer") endpoint = "/generate-offer-letter";
+      if (docType === "appointment") endpoint = "/generate-appointment-letter";
+      if (docType === "termination") endpoint = "/generate-termination-letter";
+      if (docType === "experience") endpoint = "/generate-experience-letter";
+
+      const res = await fetch(`${API_URL}${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(form),
       });
 
       if (!res.ok) throw new Error(await res.text());
+
       const data = await res.json();
-      setResult(data);
+
+      if (!data.docx_file) throw new Error("No file returned");
+
+      const downloadUrl = `${API_URL}/download/${encodeURIComponent(
+        data.docx_file
+      )}`;
+
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+      link.download = data.docx_file;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
     } catch (e: any) {
       setError(e?.message || "Something went wrong");
     } finally {
@@ -74,9 +102,27 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-black text-white p-10">
       <h1 className="text-4xl font-bold mb-2">HR AI Docs</h1>
-      <p className="text-zinc-400 mb-8">Generate professional offer letters in seconds.</p>
+      <p className="text-zinc-400 mb-8">
+        Complete HR Documentation System
+      </p>
+
+      {/* Document Selector */}
+      <div className="mb-8">
+        <label className="text-sm text-zinc-400">Document Type</label>
+        <select
+          value={docType}
+          onChange={(e) => setDocType(e.target.value)}
+          className="w-full mt-1 px-4 py-3 rounded-xl bg-zinc-900 border border-zinc-800"
+        >
+          <option value="offer">Offer Letter</option>
+          <option value="appointment">Appointment Letter</option>
+          <option value="termination">Termination Letter</option>
+          <option value="experience">Experience Letter</option>
+        </select>
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
         <Box title="Employee Details">
           <Input label="Employee Name" value={form.employee_name} onChange={(v) => update("employee_name", v)} />
           <Input label="Employee Address" value={form.employee_address} onChange={(v) => update("employee_address", v)} />
@@ -91,17 +137,24 @@ export default function Home() {
           <Input label="HR Name" value={form.hr_name} onChange={(v) => update("hr_name", v)} />
         </Box>
 
-        <Box title="Dates & Salary">
-          <Input label="Offer Date (YYYY-MM-DD)" value={form.offer_date} onChange={(v) => update("offer_date", v)} />
-          <Input label="Joining Date (YYYY-MM-DD)" value={form.joining_date} onChange={(v) => update("joining_date", v)} />
-          <Input label="CTC (example: 6 LPA)" value={form.ctc} onChange={(v) => update("ctc", v)} />
-          <Input label="Probation Months" value={form.probation_months} onChange={(v) => update("probation_months", v)} />
+        <Box title="Dates">
+          <Input label="Offer Date" value={form.offer_date} onChange={(v) => update("offer_date", v)} />
+          <Input label="Joining Date" value={form.joining_date} onChange={(v) => update("joining_date", v)} />
+          <Input label="End Date (Experience)" value={form.end_date} onChange={(v) => update("end_date", v)} />
+          <Input label="Termination Date" value={form.termination_date} onChange={(v) => update("termination_date", v)} />
         </Box>
 
-        <Box title="Terms">
-          <Input label="Notice Period (days)" value={form.notice_period} onChange={(v) => update("notice_period", v)} />
+        <Box title="Salary & Terms">
+          <Input label="CTC" value={form.ctc} onChange={(v) => update("ctc", v)} />
+          <Input label="Probation Months" value={form.probation_months} onChange={(v) => update("probation_months", v)} />
+          <Input label="Notice Period" value={form.notice_period} onChange={(v) => update("notice_period", v)} />
           <Input label="Working Hours" value={form.working_hours} onChange={(v) => update("working_hours", v)} />
         </Box>
+
+        <Box title="Termination Reason">
+          <Input label="Reason" value={form.reason} onChange={(v) => update("reason", v)} />
+        </Box>
+
       </div>
 
       <div className="mt-8 flex gap-4">
@@ -110,7 +163,7 @@ export default function Home() {
           disabled={loading}
           className="px-6 py-3 rounded-xl bg-white text-black font-semibold disabled:opacity-50"
         >
-          {loading ? "Generating..." : "Generate Offer Letter"}
+          {loading ? "Generating..." : "Generate Document"}
         </button>
 
         <button
@@ -121,26 +174,9 @@ export default function Home() {
         </button>
       </div>
 
-      {error && <div className="mt-6 text-red-400 whitespace-pre-wrap">{error}</div>}
-
-      {result && (
-        <div className="mt-8 p-6 border border-zinc-700 rounded-xl">
-          <h2 className="text-lg font-semibold mb-2">Result</h2>
-
-          {result.docx_file && (
-            <a
-              className="inline-block px-5 py-3 rounded-xl bg-zinc-900 border border-zinc-700"
-              href={`http://127.0.0.1:8000/download/${encodeURIComponent(result.docx_file)}`}
-              target="_blank"
-              rel="noreferrer"
-            >
-              Download DOCX
-            </a>
-          )}
-
-          {result.ai_review && (
-            <pre className="mt-5 text-zinc-300 whitespace-pre-wrap">{result.ai_review}</pre>
-          )}
+      {error && (
+        <div className="mt-6 text-red-400 whitespace-pre-wrap">
+          {error}
         </div>
       )}
     </div>
