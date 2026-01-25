@@ -1,3 +1,5 @@
 generated/
 .DS_Store
 *.docx
+.env
+backend/.env
