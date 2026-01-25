@@ -42,7 +42,8 @@ const defaultForm: FormState = {
   hr_name: "",
 };
 
-const API_URL = "http://127.0.0.1:8000";
+// ✅ USE ENV VARIABLE
+const API_URL = process.env.NEXT_PUBLIC_API_URL!;
 
 export default function Home() {
   const [form, setForm] = useState<FormState>(defaultForm);
@@ -71,15 +72,21 @@ export default function Home() {
 
       const res = await fetch(`${API_URL}${endpoint}`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify(form),
       });
 
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) {
+        throw new Error(await res.text());
+      }
 
       const data = await res.json();
 
-      if (!data.docx_file) throw new Error("No file returned");
+      if (!data.docx_file) {
+        throw new Error("No file returned");
+      }
 
       const downloadUrl = `${API_URL}/download/${encodeURIComponent(
         data.docx_file
@@ -88,6 +95,7 @@ export default function Home() {
       const link = document.createElement("a");
       link.href = downloadUrl;
       link.download = data.docx_file;
+
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -101,7 +109,9 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-black text-white p-10">
+
       <h1 className="text-4xl font-bold mb-2">HR AI Docs</h1>
+
       <p className="text-zinc-400 mb-8">
         Complete HR Documentation System
       </p>
@@ -109,6 +119,7 @@ export default function Home() {
       {/* Document Selector */}
       <div className="mb-8">
         <label className="text-sm text-zinc-400">Document Type</label>
+
         <select
           value={docType}
           onChange={(e) => setDocType(e.target.value)}
@@ -158,6 +169,7 @@ export default function Home() {
       </div>
 
       <div className="mt-8 flex gap-4">
+
         <button
           onClick={generate}
           disabled={loading}
@@ -172,6 +184,7 @@ export default function Home() {
         >
           Reset
         </button>
+
       </div>
 
       {error && (
@@ -179,11 +192,18 @@ export default function Home() {
           {error}
         </div>
       )}
+
     </div>
   );
 }
 
-function Box({ title, children }: { title: string; children: React.ReactNode }) {
+function Box({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
   return (
     <div className="p-6 rounded-2xl border border-zinc-800 bg-zinc-950">
       <h3 className="text-lg font-semibold mb-4">{title}</h3>
@@ -204,6 +224,7 @@ function Input({
   return (
     <div>
       <label className="text-sm text-zinc-400">{label}</label>
+
       <input
         className="w-full mt-1 px-4 py-3 rounded-xl bg-zinc-900 border border-zinc-800 outline-none focus:border-zinc-500"
         value={value}
